@@ -699,11 +699,15 @@
             }
         }
 
+        let currentSelectedLevel = null;
+        let currentCustomerName = '';
+        let currentCustomerPhone = '';
+
         function openModal(packageName) {
             const urlParams = new URLSearchParams(window.location.search);
-            const level = urlParams.get('level') || '3';
-            const name = urlParams.get('name') || '';
-            const phone = urlParams.get('phone') || '';
+            const level = currentSelectedLevel || urlParams.get('level') || '3';
+            const name = currentCustomerName || urlParams.get('name') || '';
+            const phone = currentCustomerPhone || urlParams.get('phone') || '';
 
             let amount = 299000;
             let goiCode = 'G2';
@@ -723,10 +727,11 @@
                 qrImgPath = 'qr-goi2.png';
             }
 
-            const transferCode = `${goiCode} L${level} ${phone ? phone : 'LTN'}`.trim();
+            const cleanPhone = phone ? phone.trim() : '';
+            const transferCode = `${goiCode} L${level} ${cleanPhone}`.trim();
 
             document.getElementById('modalPackageTitle').innerText = `${packageName} [LEVEL ${level}]`;
-            document.getElementById('modalCustomerInfo').innerText = name ? `Dành cho: ${decodeURIComponent(name)} (${phone})` : `Level: ${level}`;
+            document.getElementById('modalCustomerInfo').innerText = name ? `Dành cho: ${decodeURIComponent(name)} ${cleanPhone ? '(' + cleanPhone + ')' : ''}` : `Level: ${level}`;
             document.getElementById('modalAmountDisplay').innerText = `${amount.toLocaleString('vi-VN')}đ`;
             document.getElementById('transferContentCode').innerText = transferCode;
             document.getElementById('vietqrImage').src = qrImgPath;
@@ -1089,6 +1094,10 @@
             const classVal = popupAnswers[1] ? popupAnswers[1].value : '';
             const level = calculatePopupLevel();
 
+            currentSelectedLevel = level;
+            currentCustomerName = name;
+            currentCustomerPhone = phone;
+
             // Gửi dữ liệu qua Webhook Google Sheet
             const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxyk72heWCmVkONS4jRlWyyExlYwBphVp3snlNkQ_pVUM0BO5-xPZjvN2R2pUFAI9yXKQ/exec';
             try {
@@ -1108,10 +1117,10 @@
             } catch (err) {}
 
             // Hiển thị báo cáo kết quả Level trực tiếp trong Popup (KHÔNG HIỂN THỊ ĐIỂM SỐ)
-            renderPopupResult(level, name);
+            renderPopupResult(level, name, phone);
         }
 
-        function renderPopupResult(level, name) {
+        function renderPopupResult(level, name, phone) {
             const data = LEVEL_DATA[level];
 
             document.getElementById('popupQuizHeader').classList.add('hidden');
@@ -1120,6 +1129,9 @@
 
             const resultBox = document.getElementById('popupResultBox');
             resultBox.classList.remove('hidden');
+
+            const safeName = name ? encodeURIComponent(name) : '';
+            const safePhone = phone ? encodeURIComponent(phone) : '';
 
             resultBox.innerHTML = `
                 <div class="bg-gradient-to-br from-[#003870] via-[#0055A6] to-[#0F2625] text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden">
@@ -1155,7 +1167,7 @@
 
                     <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3">
                         <span class="text-xs text-blue-100 font-bold">👉 Đã cá nhân hóa 3 Gói sản phẩm theo ${data.badge}</span>
-                        <button onclick="applyPopupLevelToSalepage(${level}, '${encodeURIComponent(name)}'); closeQuizModal();" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
+                        <button onclick="applyPopupLevelToSalepage(${level}, '${safeName}', '${safePhone}'); closeQuizModal();" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
                             Vào Xem 3 Gói Học Phù Hợp →
                         </button>
                     </div>
@@ -1163,9 +1175,25 @@
             `;
         }
 
-        function applyPopupLevelToSalepage(level, name) {
+        function applyPopupLevelToSalepage(level, name, phone) {
+            const decodedName = name ? decodeURIComponent(name) : '';
+            const decodedPhone = phone ? decodeURIComponent(phone) : '';
+
+            currentSelectedLevel = level;
+            currentCustomerName = decodedName;
+            currentCustomerPhone = decodedPhone;
+
             const data = LEVEL_DATA[level];
             if (!data) return;
+
+            // Cập nhật URL trình duyệt không cần load lại trang
+            try {
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.set('level', level);
+                if (decodedName) newUrl.searchParams.set('name', decodedName);
+                if (decodedPhone) newUrl.searchParams.set('phone', decodedPhone);
+                window.history.replaceState({}, '', newUrl);
+            } catch (e) {}
             
             const existingBanner = document.getElementById('quiz-result-banner');
             if (existingBanner) existingBanner.remove();
@@ -1178,7 +1206,7 @@
                             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/20 pb-4 mb-4">
                                 <div>
                                     <span class="bg-[#CEFF8A] text-[#173433] text-xs font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow">
-                                        🎯 KẾT QUẢ KHẢO SÁT ${name ? 'DÀNH CHO: ' + decodeURIComponent(name).toUpperCase() : ''}
+                                        🎯 KẾT QUẢ KHẢO SÁT ${decodedName ? 'DÀNH CHO: ' + decodedName.toUpperCase() : ''}
                                     </span>
                                     <h2 class="text-xl sm:text-2xl font-black text-white mt-2.5 leading-tight">
                                         ${data.badge}: ${data.title}
@@ -1222,8 +1250,9 @@
 
             document.querySelectorAll('#pricing .bg-slate-900, #pricing .bg-white, #pricing .border-2').forEach(card => {
                 const titleEl = card.querySelector('h3, .text-xl, .text-2xl');
-                if (titleEl && !titleEl.innerText.includes(`LEVEL`)) {
-                    titleEl.innerText += ` [LEVEL ${level}]`;
+                if (titleEl) {
+                    const cleanTitle = titleEl.innerText.replace(/\s*\[LEVEL \d+\]/gi, '');
+                    titleEl.innerText = `${cleanTitle} [LEVEL ${level}]`;
                 }
             });
 
@@ -1247,9 +1276,10 @@
             const urlParams = new URLSearchParams(window.location.search);
             const level = parseInt(urlParams.get('level')) || 0;
             const name = urlParams.get('name') || '';
+            const phone = urlParams.get('phone') || '';
 
             if (level >= 1 && level <= 4) {
-                applyPopupLevelToSalepage(level, name);
+                applyPopupLevelToSalepage(level, name, phone);
             }
         })();
     </script>
