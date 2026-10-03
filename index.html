@@ -313,6 +313,15 @@
                 </div>
 
             </div>
+
+            <!-- BUTTON KHẢO SÁT LEVEL TRỰC TIẾP -->
+            <div class="mt-10 text-center">
+                <button onclick="openQuizModal()" class="inline-flex items-center justify-center gap-2.5 bg-[#0055A6] hover:bg-[#173433] text-[#CEFF8A] font-black text-sm sm:text-lg px-8 py-4 sm:px-10 sm:py-5 rounded-2xl shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-2 border-[#CEFF8A] animate-pulse-subtle cursor-pointer">
+                    <svg class="w-6 h-6 text-[#CEFF8A]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    <span>📋 KHẢO SÁT 2 PHÚT XÁC ĐỊNH LEVEL PHÙ HỢP CHO CON</span>
+                </button>
+                <p class="text-xs text-slate-500 font-semibold mt-2.5">⚡ Nhận kết quả Báo cáo Chẩn đoán Level tức thì · Không hiển thị điểm số</p>
+            </div>
         </div>
     </section>
 
@@ -898,7 +907,402 @@
             });
         }, 500);
 
-    })();
+    <!-- QUIZ POPUP MODAL (KHÔNG HIỂN THỊ ĐIỂM SỐ, CHỈ HIỂN THỊ BÁO CÁO KẾT QUẢ LEVEL) -->
+    <div id="quizModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-8 relative shadow-2xl my-6 border border-slate-200">
+            <button onclick="closeQuizModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-3xl font-bold z-10">&times;</button>
+            
+            <!-- QUIZ HEADER -->
+            <div id="popupQuizHeader" class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="popupStepIndicator" class="text-xs font-black text-[#0055A6] uppercase tracking-wider">Câu 1/5</span>
+                    <button onclick="resetPopupQuiz()" class="text-xs font-bold text-slate-400 hover:text-slate-600">Làm lại</button>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div id="popupProgressBar" class="bg-[#0055A6] h-full transition-all duration-300" style="width: 20%;"></div>
+                </div>
+            </div>
+
+            <!-- QUESTION BOX CONTAINER -->
+            <div id="popupQuizBox" class="min-h-[280px]"></div>
+
+            <!-- LEAD FORM CONTAINER -->
+            <div id="popupLeadBox" class="hidden min-h-[280px] flex flex-col justify-center">
+                <div class="text-center mb-5">
+                    <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-[#0055A6] rounded-full mb-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h3 class="text-xl font-black text-slate-900 mb-1">Hoàn Thành Khảo Sát!</h3>
+                    <p class="text-xs text-slate-600">Nhập thông tin bên dưới để xem <strong>Báo Cáo Chẩn Đoán Level</strong> cho con ngay trên màn hình.</p>
+                </div>
+
+                <form onsubmit="submitPopupLead(event)" class="max-w-md mx-auto w-full space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Họ tên Phụ huynh / Bé *</label>
+                        <input type="text" id="popupParentName" required placeholder="Ví dụ: Mẹ Thu / Bé An" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Số điện thoại Zalo nhận báo cáo *</label>
+                        <input type="tel" id="popupParentPhone" required pattern="[0-9]{9,11}" placeholder="Ví dụ: 0988123456" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
+                    </div>
+                    <button type="submit" class="w-full bg-[#0055A6] hover:bg-slate-900 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm">
+                        ⚡ BẤM XEM BÁO CÁO KẾT QUẢ LEVEL CỦA CON NGAY
+                    </button>
+                </form>
+            </div>
+
+            <!-- RESULT VIEW CONTAINER (KHÔNG HIỂN THỊ ĐIỂM SỐ) -->
+            <div id="popupResultBox" class="hidden min-h-[300px]"></div>
+
+            <!-- POPUP FOOTER NAV BUTTONS -->
+            <div id="popupNavButtons" class="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+                <button id="popupPrevBtn" onclick="prevPopupQuestion()" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 hidden">
+                    ← Quay lại
+                </button>
+                <div class="flex-grow"></div>
+                <button id="popupNextBtn" onclick="nextPopupQuestion()" disabled class="px-6 py-2.5 rounded-xl bg-[#0055A6] text-white text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed">
+                    Tiếp tục →
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC CHO QUIZ POPUP -->
+    <script>
+        const popupQuestions = [
+            {
+                id: 1,
+                title: "Con đang học lớp mấy?",
+                sub: "Mục đích: Chọn chủ đề phù hợp với độ tuổi (không quyết định hoàn toàn Level).",
+                type: "grid",
+                options: [
+                    { label: "Lớp 2", value: "Lớp 2", score: 1 },
+                    { label: "Lớp 3", value: "Lớp 3", score: 1 },
+                    { label: "Lớp 4", value: "Lớp 4", score: 2 },
+                    { label: "Lớp 5", value: "Lớp 5", score: 2 },
+                    { label: "Lớp 6", value: "Lớp 6", score: 3 },
+                    { label: "Lớp 7", value: "Lớp 7", score: 3 },
+                    { label: "Lớp 8", value: "Lớp 8", score: 4 },
+                    { label: "Lớp 9", value: "Lớp 9", score: 4 }
+                ]
+            },
+            {
+                id: 2,
+                title: "Khi nói về một chủ đề quen thuộc, khả năng hiện tại của con gần nhất với mô tả nào?",
+                sub: "Hãy chọn phương án gần nhất với biểu hiện hiện tại của con.",
+                type: "list",
+                options: [
+                    { label: "Con chủ yếu nói được từ, cụm từ hoặc một vài câu rất ngắn khi có người hướng dẫn.", score: 1 },
+                    { label: "Con có thể nói khoảng 5–7 câu đơn giản khi có sẵn từ vựng và bài mẫu.", score: 2 },
+                    { label: "Con có thể nói khoảng 8–12 câu liên kết, biết bổ sung lý do hoặc một ví dụ.", score: 3 },
+                    { label: "Con có thể trình bày từ 2–3 phút, nêu quan điểm và phát triển nội dung tương đối độc lập.", score: 4 }
+                ]
+            },
+            {
+                id: 3,
+                title: "Dạng tài liệu nào sẽ giúp con xây dựng bài nói phù hợp nhất?",
+                sub: "Chọn kiểu hỗ trợ con có thể sử dụng hiệu quả nhất khi tự luyện.",
+                type: "list",
+                options: [
+                    { label: "Bài mẫu song ngữ từng câu, câu ngắn và có cấu trúc đơn giản để con dễ hiểu và luyện theo.", score: 1 },
+                    { label: "Bài mẫu đầy đủ, có bố cục rõ ràng để con ghi nhớ và thay đổi một số thông tin theo bản thân.", score: 2 },
+                    { label: "Bài mẫu kết hợp từ vựng và câu hỏi gợi mở để con bổ sung lý do, ví dụ và phát triển thêm ý.", score: 3 },
+                    { label: "Bài mẫu hoàn toàn bằng tiếng Anh, có câu mở đầu thu hút, quan điểm, lập luận và kết luận rõ ràng.", score: 4 }
+                ]
+            },
+            {
+                id: 4,
+                title: "Khi sử dụng một bài nói mẫu, con thường luyện tập ở mức nào?",
+                sub: "Chọn cách con thường làm được với một bài nói đã chuẩn bị sẵn.",
+                type: "list",
+                options: [
+                    { label: "Con cần đọc, nghe và nhắc lại từng câu theo đúng nội dung có sẵn.", score: 1 },
+                    { label: "Con có thể nói theo toàn bộ bài mẫu và thay đổi tên, sở thích hoặc trải nghiệm cá nhân.", score: 2 },
+                    { label: "Sau khi tham khảo bài mẫu, con có thể dựa vào từ khóa hoặc dàn ý để trình bày theo cách của mình.", score: 3 },
+                    { label: "Con chỉ cần chủ đề và các ý chính; bài mẫu được sử dụng để mở rộng vốn từ, cách lập luận và cách diễn đạt.", score: 4 }
+                ]
+            },
+            {
+                id: 5,
+                title: "Khi tự luyện một bài nói tại nhà, biểu hiện của con gần nhất với phương án nào?",
+                sub: "Hãy chọn theo khả năng con duy trì bài nói khi luyện tập một mình.",
+                type: "list",
+                options: [
+                    { label: "Con thường dừng lại để nhớ từ, ghép câu và cần nghe mẫu từng câu để nói theo.", score: 1 },
+                    { label: "Con nói được các câu đơn giản nhưng còn chậm; cần luyện lặp lại nhiều lần để nói rõ và liền mạch hơn.", score: 2 },
+                    { label: "Con có thể tự luyện và ghi hình một bài nói khoảng 1–2 phút, nhưng vẫn cần bài mẫu hoặc dàn ý hỗ trợ.", score: 3 },
+                    { label: "Con có thể tự luyện bài nói từ 2–3 phút và tập trung nhiều hơn vào ngữ điệu, cảm xúc và kỹ năng trình bày.", score: 4 }
+                ]
+            }
+        ];
+
+        let popupStep = 0;
+        let popupAnswers = {};
+
+        function openQuizModal() {
+            document.getElementById('quizModal').classList.remove('hidden');
+            resetPopupQuiz();
+        }
+
+        function closeQuizModal() {
+            document.getElementById('quizModal').classList.add('hidden');
+        }
+
+        function renderPopupQuestion() {
+            const q = popupQuestions[popupStep];
+            document.getElementById('popupStepIndicator').innerText = `Câu ${q.id}/5`;
+            document.getElementById('popupProgressBar').style.width = `${(q.id / 5) * 100}%`;
+            document.getElementById('popupPrevBtn').classList.toggle('hidden', popupStep === 0);
+
+            const quizBox = document.getElementById('popupQuizBox');
+            let html = `
+                <h3 class="text-lg sm:text-xl font-extrabold text-slate-900 mb-1 leading-snug">${q.title}</h3>
+                <p class="text-xs text-slate-500 mb-4">${q.sub}</p>
+            `;
+
+            if (q.type === 'grid') {
+                html += `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">`;
+                q.options.forEach((opt, idx) => {
+                    const isSelected = popupAnswers[q.id] && popupAnswers[q.id].value === opt.value;
+                    html += `
+                        <button onclick="selectPopupOption(${q.id}, ${idx})" class="p-3 rounded-xl border-2 text-center transition-all ${isSelected ? 'border-[#0055A6] font-extrabold text-[#0055A6] bg-blue-50 ring-2 ring-blue-500' : 'border-slate-200 text-slate-700 font-bold bg-white'}">
+                            <span class="text-sm">${opt.label}</span>
+                        </button>
+                    `;
+                });
+                html += `</div>`;
+            } else {
+                html += `<div class="space-y-2.5 mb-4">`;
+                q.options.forEach((opt, idx) => {
+                    const isSelected = popupAnswers[q.id] && popupAnswers[q.id].score === opt.score;
+                    html += `
+                        <button onclick="selectPopupOption(${q.id}, ${idx})" class="w-full p-3 rounded-xl border-2 text-left transition-all flex items-start gap-2.5 ${isSelected ? 'border-[#0055A6] bg-blue-50 ring-2 ring-blue-500' : 'border-slate-200 bg-white'}">
+                            <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${isSelected ? 'border-[#0055A6] bg-[#0055A6]' : 'border-slate-300'}">
+                                ${isSelected ? '<div class="w-1.5 h-1.5 rounded-full bg-white"></div>' : ''}
+                            </div>
+                            <span class="text-xs font-semibold text-slate-800 leading-relaxed">${opt.label}</span>
+                        </button>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            quizBox.innerHTML = html;
+            updatePopupNextButton();
+        }
+
+        function selectPopupOption(qId, optIdx) {
+            popupAnswers[qId] = popupQuestions[popupStep].options[optIdx];
+            renderPopupQuestion();
+        }
+
+        function updatePopupNextButton() {
+            const nextBtn = document.getElementById('popupNextBtn');
+            const hasAnswer = !!popupAnswers[popupQuestions[popupStep].id];
+            nextBtn.disabled = !hasAnswer;
+
+            if (popupStep === popupQuestions.length - 1) {
+                nextBtn.innerText = `Xem Kết Quả →`;
+            } else {
+                nextBtn.innerText = `Tiếp tục →`;
+            }
+        }
+
+        function nextPopupQuestion() {
+            if (popupStep < popupQuestions.length - 1) {
+                popupStep++;
+                renderPopupQuestion();
+            } else {
+                showPopupLeadForm();
+            }
+        }
+
+        function prevPopupQuestion() {
+            if (popupStep > 0) {
+                popupStep--;
+                renderPopupQuestion();
+            }
+        }
+
+        function showPopupLeadForm() {
+            document.getElementById('popupQuizBox').classList.add('hidden');
+            document.getElementById('popupNavButtons').classList.add('hidden');
+            document.getElementById('popupLeadBox').classList.remove('hidden');
+            document.getElementById('popupStepIndicator').innerText = `HOÀN THÀNH 5/5`;
+            document.getElementById('popupProgressBar').style.width = `100%`;
+        }
+
+        function calculatePopupLevel() {
+            let total = 0;
+            for (let i = 2; i <= 5; i++) {
+                if (popupAnswers[i]) {
+                    total += popupAnswers[i].score;
+                }
+            }
+            if (total <= 6) return 1;
+            if (total <= 10) return 2;
+            if (total <= 14) return 3;
+            return 4;
+        }
+
+        function submitPopupLead(e) {
+            e.preventDefault();
+            const name = document.getElementById('popupParentName').value.trim();
+            const phone = document.getElementById('popupParentPhone').value.trim();
+            const classVal = popupAnswers[1] ? popupAnswers[1].value : '';
+            const level = calculatePopupLevel();
+
+            // Gửi dữ liệu qua Webhook Google Sheet
+            const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxyk72heWCmVkONS4jRlWyyExlYwBphVp3snlNkQ_pVUM0BO5-xPZjvN2R2pUFAI9yXKQ/exec';
+            try {
+                fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'lead',
+                        name: name,
+                        phone: phone,
+                        classVal: classVal,
+                        level: `Level ${level}`
+                    })
+                });
+            } catch (err) {}
+
+            // Hiển thị báo cáo kết quả Level trực tiếp trong Popup (KHÔNG HIỂN THỊ ĐIỂM SỐ)
+            renderPopupResult(level, name);
+        }
+
+        function renderPopupResult(level, name) {
+            const data = LEVEL_DATA[level];
+
+            document.getElementById('popupQuizHeader').classList.add('hidden');
+            document.getElementById('popupLeadBox').classList.add('hidden');
+            document.getElementById('popupNavButtons').classList.add('hidden');
+
+            const resultBox = document.getElementById('popupResultBox');
+            resultBox.classList.remove('hidden');
+
+            resultBox.innerHTML = `
+                <div class="bg-gradient-to-br from-[#003870] via-[#0055A6] to-[#0F2625] text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/20 pb-4 mb-4">
+                        <div>
+                            <span class="bg-[#CEFF8A] text-[#173433] text-xs font-black px-3 py-1 rounded-full uppercase">
+                                🎯 BÁO CÁO KHẢO SÁT LEVEL ${name ? 'CỦA: ' + name.toUpperCase() : ''}
+                            </span>
+                            <h3 class="text-lg sm:text-xl font-black text-white mt-2 leading-tight">
+                                ${data.badge}: ${data.title}
+                            </h3>
+                        </div>
+                    </div>
+
+                    <p class="text-xs sm:text-sm text-blue-100 mb-5 font-semibold italic">
+                        "${data.subtitle}"
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                            <h4 class="font-black text-[#CEFF8A] mb-2 uppercase tracking-wide text-xs">01 Đặc điểm tài liệu thiết kế riêng</h4>
+                            <ul class="space-y-1.5 text-white font-medium">
+                                ${data.features.map(f => `<li class="flex items-start gap-1.5"><span class="text-[#CEFF8A] font-black">✓</span><span>${f}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                            <h4 class="font-black text-[#CEFF8A] mb-2 uppercase tracking-wide text-xs">02 Tác dụng đạt được cho con</h4>
+                            <ul class="space-y-1.5 text-white font-medium">
+                                ${data.benefits.map(b => `<li class="flex items-start gap-1.5"><span class="text-[#CEFF8A] font-black">✓</span><span>${b}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span class="text-xs text-blue-100 font-bold">👉 Đã cá nhân hóa 3 Gói sản phẩm theo ${data.badge}</span>
+                        <button onclick="applyPopupLevelToSalepage(${level}, '${encodeURIComponent(name)}'); closeQuizModal();" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
+                            Vào Xem 3 Gói Học Phù Hợp →
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function applyPopupLevelToSalepage(level, name) {
+            const data = LEVEL_DATA[level];
+            
+            const existingBanner = document.getElementById('quiz-result-banner');
+            if (existingBanner) existingBanner.remove();
+
+            const heroSection = document.querySelector('section');
+            if (heroSection) {
+                const bannerHtml = `
+                    <div id="quiz-result-banner" class="max-w-5xl mx-auto px-4 pt-6 pb-2 relative z-30">
+                        <div class="bg-gradient-to-br from-[#003870] via-[#0055A6] to-[#0F2625] text-white p-6 sm:p-8 rounded-3xl shadow-2xl border-2 border-[#CEFF8A] relative overflow-hidden">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/20 pb-4 mb-4">
+                                <div>
+                                    <span class="bg-[#CEFF8A] text-[#173433] text-xs font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow">
+                                        🎯 KẾT QUẢ KHẢO SÁT ${name ? 'DÀNH CHO: ' + decodeURIComponent(name).toUpperCase() : ''}
+                                    </span>
+                                    <h2 class="text-xl sm:text-2xl font-black text-white mt-2.5 leading-tight">
+                                        ${data.badge}: ${data.title}
+                                    </h2>
+                                </div>
+                                <span class="bg-emerald-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg whitespace-nowrap shadow">
+                                    ⚡ Đã cá nhân hóa tài liệu
+                                </span>
+                            </div>
+
+                            <p class="text-xs sm:text-sm text-blue-100 mb-6 font-semibold italic">
+                                "${data.subtitle}"
+                            </p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+                                <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
+                                    <h3 class="font-black text-[#CEFF8A] mb-2 text-sm uppercase tracking-wide">01 Đặc điểm tài liệu thiết kế riêng</h3>
+                                    <ul class="space-y-2 text-white font-medium">
+                                        ${data.features.map(f => `<li class="flex items-start gap-2"><span class="text-[#CEFF8A] font-black">✓</span><span>${f}</span></li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
+                                    <h3 class="font-black text-[#CEFF8A] mb-2 text-sm uppercase tracking-wide">02 Tác dụng đạt được cho con</h3>
+                                    <ul class="space-y-2 text-white font-medium">
+                                        ${data.benefits.map(b => `<li class="flex items-start gap-2"><span class="text-[#CEFF8A] font-black">✓</span><span>${b}</span></li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                                <span class="text-xs text-blue-100 font-bold">👇 Dưới đây là 3 Gói Học Phù Hợp Chuẩn Đầu Ra ${data.badge} Cho Con:</span>
+                                <a href="#pricing" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
+                                    Xem 3 Gói Học Phù Hợp →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                heroSection.insertAdjacentHTML('beforebegin', bannerHtml);
+            }
+
+            document.querySelectorAll('#pricing .bg-slate-900, #pricing .bg-white, #pricing .border-2').forEach(card => {
+                const titleEl = card.querySelector('h3, .text-xl, .text-2xl');
+                if (titleEl && !titleEl.innerText.includes(`LEVEL`)) {
+                    titleEl.innerText += ` [LEVEL ${level}]`;
+                }
+            });
+
+            const pricingSection = document.getElementById('pricing');
+            if (pricingSection) pricingSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function resetPopupQuiz() {
+            popupStep = 0;
+            popupAnswers = {};
+            document.getElementById('popupQuizHeader').classList.remove('hidden');
+            document.getElementById('popupQuizBox').classList.remove('hidden');
+            document.getElementById('popupNavButtons').classList.remove('hidden');
+            document.getElementById('popupLeadBox').classList.add('hidden');
+            document.getElementById('popupResultBox').classList.add('hidden');
+            renderPopupQuestion();
+        }
     </script>
 </body>
 </html>
