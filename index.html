@@ -385,8 +385,8 @@
                         </ul>
                     </div>
 
-                    <button onclick="openModal('GÓI 1 - BỘ MẪU CÂU TỰ LUYỆN SHADOWING (99K)')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3.5 rounded-xl transition-colors text-sm">
-                        Đăng Ký Gói 99K
+                    <button onclick="handleRegisterClick('GÓI 1 - BỘ MẪU CÂU TỰ LUYỆN SHADOWING (99K)')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-extrabold py-3.5 rounded-xl transition-all text-sm">
+                        ⚡ Đăng Ký Ngay (99.000đ)
                     </button>
                 </div>
 
@@ -436,8 +436,8 @@
                         </ul>
                     </div>
 
-                    <button onclick="openModal('GÓI 2 - CHALLENGE 14 NGÀY (299K)')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3.5 rounded-xl transition-colors text-sm">
-                        🔥 Đăng Ký Gói 14 Ngày – 299K
+                    <button onclick="handleRegisterClick('GÓI 2 - CHALLENGE 14 NGÀY (299K)')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-extrabold py-3.5 rounded-xl transition-all text-sm">
+                        ⚡ Đăng Ký Ngay (299.000đ)
                     </button>
                 </div>
 
@@ -487,8 +487,8 @@
                         </ul>
                     </div>
 
-                    <button onclick="openModal('GÓI 3 - GIÁO VIÊN LTN ĐỒNG HÀNH (499K)')" class="w-full bg-[#CEFF8A] hover:bg-[#b8e86b] text-[#173433] font-black py-4 rounded-xl shadow-lg hover:shadow-xl transition-all text-base animate-pulse-subtle">
-                        🔥 Đăng Ký Gói 499K (Con Được Đồng Hành 1:1)
+                    <button onclick="handleRegisterClick('GÓI 3 - GIÁO VIÊN LTN ĐỒNG HÀNH (499K)')" class="w-full bg-[#CEFF8A] hover:bg-[#b8e86b] text-[#173433] font-black py-4 rounded-xl shadow-lg hover:shadow-xl transition-all text-base animate-pulse-subtle">
+                        🔥 Đăng Ký Ngay (499.000đ)
                     </button>
                 </div>
 
@@ -980,7 +980,21 @@
         let popupStep = 0;
         let popupAnswers = {};
 
-        function openQuizModal() {
+        let pendingSelectedPackage = null;
+
+        function handleRegisterClick(packageName) {
+            pendingSelectedPackage = packageName;
+            if (currentSelectedLevel) {
+                openModal(packageName);
+            } else {
+                openQuizModal(packageName);
+            }
+        }
+
+        function openQuizModal(packageName) {
+            if (packageName) {
+                pendingSelectedPackage = packageName;
+            }
             document.getElementById('quizModal').classList.remove('hidden');
             resetPopupQuiz();
         }
@@ -1256,8 +1270,14 @@
                 }
             });
 
-            const pricingSection = document.getElementById('pricing');
-            if (pricingSection) pricingSection.scrollIntoView({ behavior: 'smooth' });
+            if (pendingSelectedPackage) {
+                const pkg = pendingSelectedPackage;
+                pendingSelectedPackage = null;
+                openModal(pkg);
+            } else {
+                const pricingSection = document.getElementById('pricing');
+                if (pricingSection) pricingSection.scrollIntoView({ behavior: 'smooth' });
+            }
         }
 
         function resetPopupQuiz() {
