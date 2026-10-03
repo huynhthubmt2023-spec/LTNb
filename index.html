@@ -754,15 +754,71 @@
         <span class="text-sm font-extrabold tracking-tight">Vào Nhóm Zalo Free</span>
     </a>
 
-    <!-- SCRIPT TỰ ĐỘNG CHẨN ĐOÁN & CÁ NHÂN HÓA LEVEL THUỘC LUỒNG QUIZ FUNNEL -->
+
+
+    <!-- QUIZ POPUP MODAL (KHÔNG HIỂN THỊ ĐIỂM SỐ, CHỈ HIỂN THỊ BÁO CÁO KẾT QUẢ LEVEL) -->
+    <div id="quizModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-8 relative shadow-2xl my-6 border border-slate-200">
+            <button onclick="closeQuizModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-3xl font-bold z-10">&times;</button>
+            
+            <!-- QUIZ HEADER -->
+            <div id="popupQuizHeader" class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="popupStepIndicator" class="text-xs font-black text-[#0055A6] uppercase tracking-wider">Câu 1/5</span>
+                    <button onclick="resetPopupQuiz()" class="text-xs font-bold text-slate-400 hover:text-slate-600">Làm lại</button>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div id="popupProgressBar" class="bg-[#0055A6] h-full transition-all duration-300" style="width: 20%;"></div>
+                </div>
+            </div>
+
+            <!-- QUESTION BOX CONTAINER -->
+            <div id="popupQuizBox" class="min-h-[280px]"></div>
+
+            <!-- LEAD FORM CONTAINER -->
+            <div id="popupLeadBox" class="hidden min-h-[280px] flex flex-col justify-center">
+                <div class="text-center mb-5">
+                    <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-[#0055A6] rounded-full mb-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h3 class="text-xl font-black text-slate-900 mb-1">Hoàn Thành Khảo Sát!</h3>
+                    <p class="text-xs text-slate-600">Nhập thông tin bên dưới để xem <strong>Báo Cáo Chẩn Đoán Level</strong> cho con ngay trên màn hình.</p>
+                </div>
+
+                <form onsubmit="submitPopupLead(event)" class="max-w-md mx-auto w-full space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Họ tên Phụ huynh / Bé *</label>
+                        <input type="text" id="popupParentName" required placeholder="Ví dụ: Mẹ Thu / Bé An" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Số điện thoại Zalo nhận báo cáo *</label>
+                        <input type="tel" id="popupParentPhone" required pattern="[0-9]{9,11}" placeholder="Ví dụ: 0988123456" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
+                    </div>
+                    <button type="submit" class="w-full bg-[#0055A6] hover:bg-slate-900 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm">
+                        ⚡ BẤM XEM BÁO CÁO KẾT QUẢ LEVEL CỦA CON NGAY
+                    </button>
+                </form>
+            </div>
+
+            <!-- RESULT VIEW CONTAINER (KHÔNG HIỂN THỊ ĐIỂM SỐ) -->
+            <div id="popupResultBox" class="hidden min-h-[300px]"></div>
+
+            <!-- POPUP FOOTER NAV BUTTONS -->
+            <div id="popupNavButtons" class="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+                <button id="popupPrevBtn" onclick="prevPopupQuestion()" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 hidden">
+                    ← Quay lại
+                </button>
+                <div class="flex-grow"></div>
+                <button id="popupNextBtn" onclick="nextPopupQuestion()" disabled class="px-6 py-2.5 rounded-xl bg-[#0055A6] text-white text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed">
+                    Tiếp tục →
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC CHO QUIZ POPUP & LEVEL REPORT -->
     <script>
-    (function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const level = parseInt(urlParams.get('level')) || 0;
-        const name = urlParams.get('name') || '';
-
-        if (!level || level < 1 || level > 4) return;
-
         const LEVEL_DATA = {
             1: {
                 badge: "LEVEL 1",
@@ -845,131 +901,6 @@
             }
         };
 
-        const data = LEVEL_DATA[level];
-
-        const heroSection = document.querySelector('section');
-        if (heroSection) {
-            const bannerHtml = `
-                <div id="quiz-result-banner" class="max-w-5xl mx-auto px-4 pt-6 pb-2 relative z-30">
-                    <div class="bg-gradient-to-br from-[#003870] via-[#0055A6] to-[#0F2625] text-white p-6 sm:p-8 rounded-3xl shadow-2xl border-2 border-[#CEFF8A] relative overflow-hidden">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/20 pb-4 mb-4">
-                            <div>
-                                <span class="bg-[#CEFF8A] text-[#173433] text-xs font-black px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow">
-                                    🎯 KẾT QUẢ KHẢO SÁT ${name ? 'DÀNH CHO: ' + decodeURIComponent(name).toUpperCase() : ''}
-                                </span>
-                                <h2 class="text-xl sm:text-2xl font-black text-white mt-2.5 leading-tight">
-                                    ${data.badge}: ${data.title}
-                                </h2>
-                            </div>
-                            <span class="bg-emerald-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg whitespace-nowrap shadow">
-                                ⚡ Đã cá nhân hóa tài liệu
-                            </span>
-                        </div>
-
-                        <p class="text-xs sm:text-sm text-blue-100 mb-6 font-semibold italic">
-                            "${data.subtitle}"
-                        </p>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
-                            <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
-                                <h3 class="font-black text-[#CEFF8A] mb-2 text-sm uppercase tracking-wide">01 Đặc điểm tài liệu thiết kế riêng</h3>
-                                <ul class="space-y-2 text-white font-medium">
-                                    ${data.features.map(f => `<li class="flex items-start gap-2"><span class="text-[#CEFF8A] font-black">✓</span><span>${f}</span></li>`).join('')}
-                                </ul>
-                            </div>
-                            <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
-                                <h3 class="font-black text-[#CEFF8A] mb-2 text-sm uppercase tracking-wide">02 Tác dụng đạt được cho con</h3>
-                                <ul class="space-y-2 text-white font-medium">
-                                    ${data.benefits.map(b => `<li class="flex items-start gap-2"><span class="text-[#CEFF8A] font-black">✓</span><span>${b}</span></li>`).join('')}
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-                            <span class="text-xs text-blue-100 font-bold">👇 Dưới đây là 3 Gói Học Phù Hợp Chuẩn Đầu Ra ${data.badge} Cho Con:</span>
-                            <a href="#pricing" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
-                                Xem 3 Gói Học Phù Hợp →
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            `;
-            heroSection.insertAdjacentHTML('beforebegin', bannerHtml);
-        }
-
-        // Tự động gắn nhãn Level vào Bảng giá
-        setTimeout(() => {
-            document.querySelectorAll('#pricing .bg-slate-900, #pricing .bg-white, #pricing .border-2').forEach(card => {
-                const titleEl = card.querySelector('h3, .text-xl, .text-2xl');
-                if (titleEl && !titleEl.innerText.includes(`LEVEL`)) {
-                    titleEl.innerText += ` [LEVEL ${level}]`;
-                }
-            });
-        }, 500);
-
-    <!-- QUIZ POPUP MODAL (KHÔNG HIỂN THỊ ĐIỂM SỐ, CHỈ HIỂN THỊ BÁO CÁO KẾT QUẢ LEVEL) -->
-    <div id="quizModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-        <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-8 relative shadow-2xl my-6 border border-slate-200">
-            <button onclick="closeQuizModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-3xl font-bold z-10">&times;</button>
-            
-            <!-- QUIZ HEADER -->
-            <div id="popupQuizHeader" class="mb-5">
-                <div class="flex items-center justify-between mb-2">
-                    <span id="popupStepIndicator" class="text-xs font-black text-[#0055A6] uppercase tracking-wider">Câu 1/5</span>
-                    <button onclick="resetPopupQuiz()" class="text-xs font-bold text-slate-400 hover:text-slate-600">Làm lại</button>
-                </div>
-                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div id="popupProgressBar" class="bg-[#0055A6] h-full transition-all duration-300" style="width: 20%;"></div>
-                </div>
-            </div>
-
-            <!-- QUESTION BOX CONTAINER -->
-            <div id="popupQuizBox" class="min-h-[280px]"></div>
-
-            <!-- LEAD FORM CONTAINER -->
-            <div id="popupLeadBox" class="hidden min-h-[280px] flex flex-col justify-center">
-                <div class="text-center mb-5">
-                    <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-[#0055A6] rounded-full mb-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <h3 class="text-xl font-black text-slate-900 mb-1">Hoàn Thành Khảo Sát!</h3>
-                    <p class="text-xs text-slate-600">Nhập thông tin bên dưới để xem <strong>Báo Cáo Chẩn Đoán Level</strong> cho con ngay trên màn hình.</p>
-                </div>
-
-                <form onsubmit="submitPopupLead(event)" class="max-w-md mx-auto w-full space-y-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">Họ tên Phụ huynh / Bé *</label>
-                        <input type="text" id="popupParentName" required placeholder="Ví dụ: Mẹ Thu / Bé An" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">Số điện thoại Zalo nhận báo cáo *</label>
-                        <input type="tel" id="popupParentPhone" required pattern="[0-9]{9,11}" placeholder="Ví dụ: 0988123456" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0055A6] outline-none">
-                    </div>
-                    <button type="submit" class="w-full bg-[#0055A6] hover:bg-slate-900 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg transition-all text-sm">
-                        ⚡ BẤM XEM BÁO CÁO KẾT QUẢ LEVEL CỦA CON NGAY
-                    </button>
-                </form>
-            </div>
-
-            <!-- RESULT VIEW CONTAINER (KHÔNG HIỂN THỊ ĐIỂM SỐ) -->
-            <div id="popupResultBox" class="hidden min-h-[300px]"></div>
-
-            <!-- POPUP FOOTER NAV BUTTONS -->
-            <div id="popupNavButtons" class="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-                <button id="popupPrevBtn" onclick="prevPopupQuestion()" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 hidden">
-                    ← Quay lại
-                </button>
-                <div class="flex-grow"></div>
-                <button id="popupNextBtn" onclick="nextPopupQuestion()" disabled class="px-6 py-2.5 rounded-xl bg-[#0055A6] text-white text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed">
-                    Tiếp tục →
-                </button>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- JAVASCRIPT LOGIC CHO QUIZ POPUP -->
-    <script>
         const popupQuestions = [
             {
                 id: 1,
@@ -1228,6 +1159,7 @@
 
         function applyPopupLevelToSalepage(level, name) {
             const data = LEVEL_DATA[level];
+            if (!data) return;
             
             const existingBanner = document.getElementById('quiz-result-banner');
             if (existingBanner) existingBanner.remove();
@@ -1303,6 +1235,17 @@
             document.getElementById('popupResultBox').classList.add('hidden');
             renderPopupQuestion();
         }
+
+        // Tự động kiểm tra URL query parameters khi tải trang
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const level = parseInt(urlParams.get('level')) || 0;
+            const name = urlParams.get('name') || '';
+
+            if (level >= 1 && level <= 4) {
+                applyPopupLevelToSalepage(level, name);
+            }
+        })();
     </script>
 </body>
 </html>
