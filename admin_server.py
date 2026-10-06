@@ -1324,7 +1324,7 @@ ADMIN_HTML = '''
 
             <div class="mt-3 pt-3 border-t border-[#E5DFD3] flex items-center justify-between">
                 <span class="text-[11px] text-slate-500 font-semibold">LTN Admin</span>
-                <a href="/admin/logout" class="text-xs font-extrabold text-red-600 hover:text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                <a href="/admin?logout=1" class="text-xs font-extrabold text-red-600 hover:text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
                     🚪 Đăng xuất
                 </a>
             </div>
@@ -2651,7 +2651,7 @@ LOGIN_HTML = '''
         </div>
         {% endif %}
 
-        <form method="POST" action="/admin/login" class="space-y-4">
+        <form method="POST" action="/admin" class="space-y-4">
             <div>
                 <label class="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1.5">Tên Đăng Nhập (Username)</label>
                 <input type="text" name="username" required placeholder="Tên đăng nhập..." class="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
@@ -2694,15 +2694,15 @@ def check_admin_security():
     if path.startswith('/admin/api') and not is_admin_logged_in():
         return jsonify({'success': False, 'message': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!'}), 401
 
-@app.route('/admin', methods=['GET'])
+@app.route('/admin', methods=['GET', 'POST'])
 def admin_panel():
-    if not is_admin_logged_in():
-        return redirect('/admin/login')
-    return render_template_string(ADMIN_HTML)
-
-@app.route('/admin/login', methods=['GET', 'POST'])
-def admin_login():
     error = None
+
+    if request.args.get('logout'):
+        session.pop('admin_logged_in', None)
+        session.pop('admin_username', None)
+        return render_template_string(LOGIN_HTML, error="Đã đăng xuất thành công!")
+
     if request.method == 'POST':
         user_input = request.form.get('username', '').strip()
         pass_input = request.form.get('password', '').strip()
@@ -2711,20 +2711,14 @@ def admin_login():
         if user_input == valid_u and pass_input == valid_p:
             session['admin_logged_in'] = True
             session['admin_username'] = user_input
-            return redirect('/admin')
+            return render_template_string(ADMIN_HTML)
         else:
             error = "Tên đăng nhập hoặc mật khẩu không chính xác!"
 
     if is_admin_logged_in():
-        return redirect('/admin')
+        return render_template_string(ADMIN_HTML)
 
     return render_template_string(LOGIN_HTML, error=error)
-
-@app.route('/admin/logout', methods=['GET'])
-def admin_logout():
-    session.pop('admin_logged_in', None)
-    session.pop('admin_username', None)
-    return redirect('/admin/login')
 
 if __name__ == '__main__':
     port = 5000
