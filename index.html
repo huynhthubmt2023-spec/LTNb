@@ -662,7 +662,7 @@
                 </div>
             </div>
 
-            <button onclick="closeModal()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl shadow-md transition-all text-xs mt-4">
+            <button onclick="handlePaymentConfirmed()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl shadow-md transition-all text-xs mt-4">
                 ✅ TÔI ĐÃ CHUYỂN KHOẢN
             </button>
         </div>
@@ -728,6 +728,40 @@
 
         function closeModal() {
             document.getElementById('orderModal').classList.add('hidden');
+        }
+
+        function handlePaymentConfirmed() {
+            currentSelectedLevel = null;
+            currentCustomerName = '';
+            currentCustomerPhone = '';
+            pendingSelectedPackage = null;
+
+            try {
+                localStorage.removeItem('ltn_selected_level');
+                localStorage.removeItem('ltn_customer_name');
+                localStorage.removeItem('ltn_customer_phone');
+                localStorage.removeItem('ltn_quiz_result');
+            } catch (e) {}
+
+            try {
+                document.cookie = "ltn_selected_level=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                document.cookie = "ltn_customer_name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                document.cookie = "ltn_customer_phone=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            } catch (e) {}
+
+            const existingBanner = document.getElementById('quiz-result-banner');
+            if (existingBanner) existingBanner.remove();
+
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('level');
+                url.searchParams.delete('name');
+                url.searchParams.delete('phone');
+                window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+            } catch (e) {}
+
+            closeModal();
+            alert('✅ Cảm ơn bạn đã chuyển khoản! Đơn hàng của bạn đang được hệ thống xử lý.');
         }
 
         function copyTransferContent() {
@@ -1172,7 +1206,7 @@
                     <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3">
                         <span class="text-xs text-blue-100 font-bold">👉 Đã cá nhân hóa 3 Gói sản phẩm theo ${data.badge}</span>
                         <button onclick="applyPopupLevelToSalepage(${level}, '${safeName}', '${safePhone}'); closeQuizModal();" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
-                            Vào Xem 3 Gói Học Phù Hợp →
+                            THANH TOÁN NGAY →
                         </button>
                     </div>
                 </div>
@@ -1243,7 +1277,7 @@
                             <div class="mt-6 pt-4 border-t border-white/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                                 <span class="text-xs text-blue-100 font-bold">👇 Dưới đây là 3 Gói Học Phù Hợp Chuẩn Đầu Ra ${data.badge} Cho Con:</span>
                                 <a href="#pricing" class="bg-[#CEFF8A] hover:bg-white text-[#173433] font-black px-5 py-2.5 rounded-full shadow-lg transition-all text-xs uppercase tracking-wide">
-                                    Xem 3 Gói Học Phù Hợp →
+                                    THANH TOÁN NGAY →
                                 </a>
                             </div>
                         </div>
