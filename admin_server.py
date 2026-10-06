@@ -8,9 +8,10 @@ import threading
 from datetime import datetime, timedelta
 import urllib.request
 import urllib.error
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, redirect, url_for, session
 
 app = Flask(__name__)
+app.secret_key = 'ltn_admin_secure_secret_key_2026_speaking'
 DB_PATH = os.path.join(os.path.dirname(__file__), 'brain.db')
 
 def get_db():
@@ -140,9 +141,14 @@ def init_db():
             ('membership_vip_price', '299000'),
             ('membership_perks', 'Truy cập trọn bộ tài liệu 4 Level + Giáo viên đồng hành'),
             ('ai_system_prompt', 'Bạn là trợ lý AI thông minh cho LTN Speaking, hỗ trợ phụ huynh & học sinh.'),
-            ('ai_model', 'gpt-4o-mini')
+            ('ai_model', 'gpt-4o-mini'),
+            ('admin_username', 'admin'),
+            ('admin_password', 'ltn123456')
         ]
         c.executemany("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", default_settings)
+
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_username', 'admin')")
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_password', 'ltn123456')")
         
     conn.commit()
     ensure_customer_orders(conn)
@@ -1316,13 +1322,12 @@ ADMIN_HTML = '''
             </nav>
         </div>
 
-        <!-- FOOTER STATUS -->
-        <div class="pt-6 border-t border-[#E5DFD3] px-2 text-xs">
-            <div class="flex items-center gap-2 text-emerald-700 font-bold">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Affiliate System Active</span>
+            <div class="mt-3 pt-3 border-t border-[#E5DFD3] flex items-center justify-between">
+                <span class="text-[11px] text-slate-500 font-semibold">LTN Admin</span>
+                <a href="/admin/logout" class="text-xs font-extrabold text-red-600 hover:text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                    🚪 Đăng xuất
+                </a>
             </div>
-            <p class="text-[11px] text-slate-500 mt-1 font-medium">Auto-track & Payout Engine</p>
         </div>
     </aside>
 
@@ -1595,6 +1600,14 @@ ADMIN_HTML = '''
                         <div>
                             <label class="block text-[11px] font-bold text-slate-600 mb-1">Số điện thoại hỗ trợ</label>
                             <input type="text" id="setting_contact_phone" class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-amber-700 mb-1">🔑 Tên đăng nhập Admin (Username)</label>
+                            <input type="text" id="setting_admin_username" placeholder="admin" class="w-full bg-[#FEF3C7] border border-amber-300 text-xs font-bold text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-amber-700 mb-1">🔒 Mật khẩu Admin (Password)</label>
+                            <input type="password" id="setting_admin_password" placeholder="Mật khẩu..." class="w-full bg-[#FEF3C7] border border-amber-300 text-xs font-bold text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
                         </div>
                     </div>
                 </div>
@@ -2611,9 +2624,107 @@ ADMIN_HTML = '''
 </html>
 '''
 
+LOGIN_HTML = '''
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng Nhập Quản Trị — LTN Speaking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Plus Jakarta Sans', sans-serif; } </style>
+</head>
+<body class="bg-[#0F172A] text-slate-100 flex items-center justify-center min-h-screen p-4">
+    <div class="max-w-md w-full bg-[#1E293B] border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+        <div class="text-center mb-6">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-amber-600 to-yellow-500 text-white rounded-2xl mb-3 shadow-lg">
+                <span class="text-3xl">🔒</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight">LTN ADMIN SYSTEM</h1>
+            <p class="text-xs text-slate-400 mt-1">Vui lòng đăng nhập để mở bảng điều khiển Admin</p>
+        </div>
+
+        {% if error %}
+        <div class="mb-5 bg-red-500/20 border border-red-500/40 text-red-300 px-4 py-3 rounded-xl text-xs font-bold text-center">
+            ⚠️ {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/admin/login" class="space-y-4">
+            <div>
+                <label class="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1.5">Tên Đăng Nhập (Username)</label>
+                <input type="text" name="username" required placeholder="Tên đăng nhập..." class="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1.5">Mật Khẩu (Password)</label>
+                <input type="password" name="password" required placeholder="Mật khẩu..." class="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500">
+            </div>
+
+            <button type="submit" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-black py-3.5 rounded-xl shadow-lg transition-all text-xs uppercase tracking-wider mt-2">
+                🔑 ĐĂNG NHẬP QUẢN TRỊ
+            </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-700/60 text-center">
+            <p class="text-[11px] text-slate-500">Lớp Bảo Mật Khóa Admin • LTN Speaking 2026</p>
+        </div>
+    </div>
+</body>
+</html>
+'''
+
+def is_admin_logged_in():
+    return session.get('admin_logged_in') is True
+
+def get_admin_credentials():
+    conn = get_db()
+    c = conn.cursor()
+    u_row = c.execute("SELECT value FROM settings WHERE key = 'admin_username'").fetchone()
+    p_row = c.execute("SELECT value FROM settings WHERE key = 'admin_password'").fetchone()
+    conn.close()
+    u = u_row['value'] if u_row and u_row['value'] else 'admin'
+    p = p_row['value'] if p_row and p_row['value'] else 'ltn123456'
+    return u, p
+
+@app.before_request
+def check_admin_security():
+    path = request.path
+    if path.startswith('/admin/api') and not is_admin_logged_in():
+        return jsonify({'success': False, 'message': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!'}), 401
+
 @app.route('/admin', methods=['GET'])
 def admin_panel():
+    if not is_admin_logged_in():
+        return redirect('/admin/login')
     return render_template_string(ADMIN_HTML)
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = None
+    if request.method == 'POST':
+        user_input = request.form.get('username', '').strip()
+        pass_input = request.form.get('password', '').strip()
+        valid_u, valid_p = get_admin_credentials()
+        
+        if user_input == valid_u and pass_input == valid_p:
+            session['admin_logged_in'] = True
+            session['admin_username'] = user_input
+            return redirect('/admin')
+        else:
+            error = "Tên đăng nhập hoặc mật khẩu không chính xác!"
+
+    if is_admin_logged_in():
+        return redirect('/admin')
+
+    return render_template_string(LOGIN_HTML, error=error)
+
+@app.route('/admin/logout', methods=['GET'])
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    session.pop('admin_username', None)
+    return redirect('/admin/login')
 
 if __name__ == '__main__':
     port = 5000
