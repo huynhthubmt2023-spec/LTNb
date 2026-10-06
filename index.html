@@ -1154,6 +1154,22 @@
                 });
             } catch (err) {}
 
+            // Đồng bộ dữ liệu Khách hàng & Tạo Đơn hàng chờ vào Admin Database (/api/leads)
+            try {
+                const adminApiUrl = (window.location.protocol.startsWith('http') ? '/api/leads' : 'http://localhost:5000/api/leads');
+                fetch(adminApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        phone: phone,
+                        email: email || null,
+                        level: level,
+                        goi: 1
+                    })
+                }).catch(err => console.log('Admin Sync Note:', err));
+            } catch (err) {}
+
             // Hiển thị báo cáo kết quả Level trực tiếp trong Popup (KHÔNG HIỂN THỊ ĐIỂM SỐ)
             renderPopupResult(level, name, phone);
         }
