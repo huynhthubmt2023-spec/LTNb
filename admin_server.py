@@ -2723,4 +2723,5 @@ def admin_panel():
 if __name__ == '__main__':
     port = 5000
     print(f"[LTN Admin] Running on http://127.0.0.1:{port}/admin")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # Chỉ lắng nghe nội bộ: truy cập từ ngoài phải đi qua proxy https://speaking.ltn.edu.vn
+    app.run(host='127.0.0.1', port=port, debug=False)
