@@ -663,7 +663,7 @@
             </div>
 
             <button onclick="handlePaymentConfirmed()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl shadow-md transition-all text-xs mt-4">
-                ✅ TÔI ĐÃ CHUYỂN KHOẢN
+                TRỞ VỀ TRANG CHỦ
             </button>
         </div>
     </div>
@@ -761,7 +761,7 @@
             } catch (e) {}
 
             closeModal();
-            alert('✅ Cảm ơn bạn đã chuyển khoản! Đơn hàng của bạn đang được hệ thống xử lý.');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function copyTransferContent() {

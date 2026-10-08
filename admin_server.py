@@ -155,27 +155,8 @@ def init_db():
     conn.close()
 
 def ensure_customer_orders(conn):
-    try:
-        c = conn.cursor()
-        unlinked = c.execute('''
-            SELECT c.id FROM customers c
-            LEFT JOIN orders o ON c.id = o.customer_id
-            WHERE o.id IS NULL
-        ''').fetchall()
-        if unlinked:
-            prod = c.execute("SELECT id, price FROM products ORDER BY id ASC LIMIT 1").fetchone()
-            prod_id = prod['id'] if prod else 1
-            price = float(prod['price']) if prod and prod['price'] else 99000.0
-            for row in unlinked:
-                c.execute('''
-                    INSERT INTO orders (customer_id, product_id, quantity, amount, status, order_date)
-                    VALUES (?, ?, 1, ?, 'pending', datetime('now', 'localtime'))
-                ''', (row['id'], prod_id, price))
-                oid = c.lastrowid
-                c.execute("INSERT OR IGNORE INTO order_reminders (order_id, reminder_1h_sent, reminder_1d_sent) VALUES (?, 0, 0)", (oid,))
-            conn.commit()
-    except Exception as e:
-        print(f"[ensure_customer_orders error]: {e}")
+    # Đã tắt: Không tự động tạo đơn hàng giả lập cho khách hàng khi danh sách đơn trống
+    pass
 
 init_db()
 
@@ -1095,6 +1076,18 @@ def delete_order(oid):
     conn.close()
     return jsonify({'success': True, 'message': 'Đã xóa đơn hàng!'})
 
+@app.route('/admin/api/orders/clear-all', methods=['POST'])
+def clear_all_orders():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DELETE FROM order_reminders")
+    c.execute("DELETE FROM affiliate_referrals")
+    c.execute("DELETE FROM orders")
+    c.execute("DELETE FROM sqlite_sequence WHERE name IN ('orders', 'order_reminders', 'affiliate_referrals')")
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Đã xóa toàn bộ dữ liệu đơn hàng và sẵn sàng cho chiến dịch mới!'})
+
 # SEPAY AUTOMATED BANK PAYMENT WEBHOOK (WITH AUTOMATIC PENDING ORDER MATCHING & AFFILIATE TRACKING)
 @app.route('/api/webhooks/sepay', methods=['POST'])
 def sepay_webhook():
@@ -1443,9 +1436,14 @@ ADMIN_HTML = '''
             <div class="mb-6">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
                     <h2 class="text-3xl font-serif text-slate-900 tracking-wide">Đơn hàng</h2>
-                    <button onclick="openOrderModal()" class="bg-[#D97706] hover:bg-[#B45309] text-white font-black px-5 py-2.5 rounded-xl text-xs shadow-md transition-all">
-                        + Tạo đơn hàng mới
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="clearAllOrders()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                            <span>🗑️ Xóa tất cả đơn hàng</span>
+                        </button>
+                        <button onclick="openOrderModal()" class="bg-[#D97706] hover:bg-[#B45309] text-white font-black px-5 py-2.5 rounded-xl text-xs shadow-md transition-all">
+                            + Tạo đơn hàng mới
+                        </button>
+                    </div>
                 </div>
                 <p class="text-xs text-slate-500 font-medium">Tự động gửi link Google Drive khi hoàn tất & tự động ghi nhận mã CTV giới thiệu.</p>
             </div>
@@ -2574,6 +2572,24 @@ ADMIN_HTML = '''
             const result = await res.json();
             showToast(result.message);
             loadOrders();
+        }
+
+        async function clearAllOrders() {
+            if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu đơn hàng để chạy chiến dịch mới không? Thao tác này không thể hoàn tác!')) return;
+            try {
+                showToast('Đang xóa toàn bộ đơn hàng...');
+                const res = await fetch('/admin/api/orders/clear-all', { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(result.message, 'success');
+                    loadOrders();
+                    if (typeof loadAffiliates === 'function') loadAffiliates();
+                } else {
+                    showToast(result.message, 'error');
+                }
+            } catch (err) {
+                showToast('Lỗi khi xóa đơn hàng: ' + err, 'error');
+            }
         }
 
         // SETTINGS TAB LOGIC
