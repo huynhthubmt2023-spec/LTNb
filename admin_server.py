@@ -274,7 +274,7 @@ def send_document_email(customer_email, customer_name, product_name, document_li
     """
 
     payload = json.dumps({
-        "from": "LTN Speaking <onboarding@resend.dev>",
+        "from": "LTN Speaking <onboarding@mail.ltn.edu.vn>",
         "to": [customer_email],
         "subject": f"🎯 [LTN Speaking] Gửi link Google Drive tài liệu: {product_name} (Đơn #{order_id})",
         "html": html_body
@@ -386,7 +386,7 @@ def send_reminder_email(customer_email, customer_name, product_name, amount, ord
     """
 
     payload = json.dumps({
-        "from": "LTN Speaking <onboarding@resend.dev>",
+        "from": "LTN Speaking <onboarding@mail.ltn.edu.vn>",
         "to": [customer_email],
         "subject": subject,
         "html": html_body
