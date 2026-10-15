@@ -308,7 +308,7 @@ def send_document_email(customer_email, customer_name, product_name, document_li
           <p>Dưới đây là liên kết Google Drive chứa trọn bộ tài liệu, giáo trình và bài học video/audio cho gói của bạn:</p>
 
           <div style="text-align: center;">
-            <a href="{document_link}" class="btn" target="_blank">📂 MỞ THƯ MỤC GOOGLE DRIVE TÀI LIỆU</a>
+            <a href="{document_link}" class="btn" target="_blank">📂 MỞ TÀI LIỆU</a>
           </div>
 {gift_html}
 
