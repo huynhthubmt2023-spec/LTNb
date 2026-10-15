@@ -238,18 +238,25 @@ def get_gifts_for_price(price):
     s = {r['key']: (r['value'] or '').strip() for r in rows}
     gifts = []
     for i in range(1, tier + 1):
+        name = s.get(f'gift_{i}_name', '') or f'Quà tặng {i}'
+        # gift_{i}_in_folder = '1' -> gift is already inside the product's Drive folder (no separate link)
+        if s.get(f'gift_{i}_in_folder', '') in ('1', 'true', 'yes'):
+            gifts.append((name, None))
+            continue
         link = s.get(f'gift_{i}_link', '')
         if link:
-            gifts.append((s.get(f'gift_{i}_name', '') or f'Quà tặng {i}', link))
+            gifts.append((name, link))
     return gifts
 
 def build_gift_html(gifts):
     if not gifts:
         return ""
-    items = "".join(
-        f'<a href="{link}" target="_blank" style="display:block; background:#ffffff; border:1px solid #fbcfe8; color:#9d174d; text-decoration:none; padding:12px 16px; border-radius:10px; font-weight:800; font-size:14px; margin:8px 0;">🎁 {name} &rarr;</a>'
-        for name, link in gifts
-    )
+    def item(name, link):
+        if link:
+            return f'<a href="{link}" target="_blank" style="display:block; background:#ffffff; border:1px solid #fbcfe8; color:#9d174d; text-decoration:none; padding:12px 16px; border-radius:10px; font-weight:800; font-size:14px; margin:8px 0;">🎁 {name} &rarr;</a>'
+        return (f'<div style="display:block; background:#ffffff; border:1px solid #fbcfe8; color:#9d174d; padding:12px 16px; border-radius:10px; font-weight:800; font-size:14px; margin:8px 0;">'
+                f'🎁 {name}<br><span style="font-weight:600; font-size:12px; color:#64748b;">📂 Đã có sẵn trong thư mục tài liệu Google Drive ở trên</span></div>')
+    items = "".join(item(name, link) for name, link in gifts)
     return f"""
           <div style="background:#fdf2f8; border:1px dashed #f472b6; border-radius:14px; padding:18px 20px; margin:24px 0;">
             <p style="margin:0 0 6px 0; font-size:15px; font-weight:900; color:#9d174d;">🎁 QUÀ TẶNG KÈM GÓI CỦA BẠN</p>
