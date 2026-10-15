@@ -216,11 +216,54 @@ def record_affiliate_referral(order_id, affiliate_code, order_amount, order_stat
     conn.close()
 
 # HELPER 1: EMAIL DISPATCHER FOR COMPLETED DOCUMENT DELIVERY VIA RESEND API
-def send_document_email(customer_email, customer_name, product_name, document_link, order_id):
+# Gift tiers: mapped by PRODUCT price (not order amount). Cumulative: tier N receives gifts 1..N.
+GIFT_TIER_BY_PRICE = {99000: 1, 299000: 2, 499000: 3}
+# Package number <-> price (used to infer the package from the transferred amount)
+GOI_PRICE = {'1': 99000, '2': 299000, '3': 499000}
+GOI_BY_AMOUNT = {v: k for k, v in GOI_PRICE.items()}
+
+def get_gifts_for_price(price):
+    """Return list of (gift_name, gift_link) for a product price. Empty list if no tier / no links configured."""
+    try:
+        tier = GIFT_TIER_BY_PRICE.get(int(round(float(price or 0))), 0)
+    except (TypeError, ValueError):
+        tier = 0
+    if tier == 0:
+        return []
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT key, value FROM settings WHERE key LIKE 'gift_%'").fetchall()
+    finally:
+        conn.close()
+    s = {r['key']: (r['value'] or '').strip() for r in rows}
+    gifts = []
+    for i in range(1, tier + 1):
+        link = s.get(f'gift_{i}_link', '')
+        if link:
+            gifts.append((s.get(f'gift_{i}_name', '') or f'Quà tặng {i}', link))
+    return gifts
+
+def build_gift_html(gifts):
+    if not gifts:
+        return ""
+    items = "".join(
+        f'<a href="{link}" target="_blank" style="display:block; background:#ffffff; border:1px solid #fbcfe8; color:#9d174d; text-decoration:none; padding:12px 16px; border-radius:10px; font-weight:800; font-size:14px; margin:8px 0;">🎁 {name} &rarr;</a>'
+        for name, link in gifts
+    )
+    return f"""
+          <div style="background:#fdf2f8; border:1px dashed #f472b6; border-radius:14px; padding:18px 20px; margin:24px 0;">
+            <p style="margin:0 0 6px 0; font-size:15px; font-weight:900; color:#9d174d;">🎁 QUÀ TẶNG KÈM GÓI CỦA BẠN</p>
+            <p style="margin:0 0 6px 0; font-size:13px; color:#64748b;">Cảm ơn bạn đã tin chọn LTN Speaking! Đây là phần quà dành riêng cho gói bạn đã đăng ký:</p>
+            {items}
+          </div>
+    """
+
+def send_document_email(customer_email, customer_name, product_name, document_link, order_id, gifts=None):
     if not customer_email or not document_link:
         return False, "Thiếu địa chỉ Email khách hàng hoặc Link tài liệu sản phẩm Drive."
 
     api_key = get_resend_api_key()
+    gift_html = build_gift_html(gifts)
 
     html_body = f"""
     <!DOCTYPE html>
@@ -260,6 +303,7 @@ def send_document_email(customer_email, customer_name, product_name, document_li
           <div style="text-align: center;">
             <a href="{document_link}" class="btn" target="_blank">📂 MỞ THƯ MỤC GOOGLE DRIVE TÀI LIỆU</a>
           </div>
+{gift_html}
 
           <p style="margin-top: 24px; font-size: 13px; color: #64748b; background-color: #f1f5f9; padding: 12px; border-radius: 8px;">
             💡 <strong>Mẹo học tập:</strong> Bạn có thể lưu link Google Drive này vào Bookmark hoặc tải về máy để luyện tập Shadowing hàng ngày. Nếu cần hỗ trợ 1:1, xin liên hệ Hotline/Zalo: <strong>0947789782</strong>.
@@ -276,7 +320,7 @@ def send_document_email(customer_email, customer_name, product_name, document_li
     payload = json.dumps({
         "from": "LTN Speaking <onboarding@mail.ltn.edu.vn>",
         "to": [customer_email],
-        "subject": f"🎯 [LTN Speaking] Gửi link Google Drive tài liệu: {product_name} (Đơn #{order_id})",
+        "subject": f"🎯 [LTN Speaking] Gửi link Google Drive tài liệu{' + 🎁 Quà tặng' if gifts else ''}: {product_name} (Đơn #{order_id})",
         "html": html_body
     }).encode('utf-8')
 
@@ -636,14 +680,28 @@ def register_lead():
         prod_row = c.execute("SELECT id, price FROM products WHERE type = 'digital' ORDER BY id ASC LIMIT 1").fetchone()
 
     product_id = prod_row['id'] if prod_row else 1
-    amount = float(prod_row['price']) if prod_row and prod_row['price'] else 99000.0
+    amount = float(prod_row['price']) if prod_row and prod_row['price'] else float(GOI_PRICE.get(goi_num, 99000))
 
-    # 3. Create Pending Order
-    c.execute('''
-        INSERT INTO orders (customer_id, product_id, quantity, amount, status, order_date)
-        VALUES (?, ?, 1, ?, 'pending', datetime('now', 'localtime'))
-    ''', (customer_id, product_id, amount))
-    order_id = c.lastrowid
+    # 3. Reuse the customer's recent pending order (e.g. lead created at quiz step, then package chosen later)
+    #    instead of creating duplicates — so the order always reflects the package the customer actually picked.
+    existing_order = c.execute('''
+        SELECT id FROM orders
+        WHERE customer_id = ? AND status IN ('pending', 'Chờ xác nhận', 'Chờ chuyển khoản')
+          AND order_date >= datetime('now', 'localtime', '-2 days')
+        ORDER BY id DESC LIMIT 1
+    ''', (customer_id,)).fetchone()
+
+    if existing_order:
+        order_id = existing_order['id']
+        c.execute("UPDATE orders SET product_id = ?, amount = ? WHERE id = ?", (product_id, amount, order_id))
+        action_msg = f'Đã cập nhật Đơn hàng chờ #{order_id} theo gói đã chọn'
+    else:
+        c.execute('''
+            INSERT INTO orders (customer_id, product_id, quantity, amount, status, order_date)
+            VALUES (?, ?, 1, ?, 'pending', datetime('now', 'localtime'))
+        ''', (customer_id, product_id, amount))
+        order_id = c.lastrowid
+        action_msg = f'Đã tự động tạo Đơn hàng chờ #{order_id}'
 
     # 4. Init Reminder Tracker
     c.execute("INSERT OR IGNORE INTO order_reminders (order_id, reminder_1h_sent, reminder_1d_sent) VALUES (?, 0, 0)", (order_id,))
@@ -655,7 +713,7 @@ def register_lead():
         'success': True,
         'customer_id': customer_id,
         'order_id': order_id,
-        'message': f'Đã tự động tạo Khách hàng #{customer_id} và Đơn hàng chờ #{order_id}!'
+        'message': f'Khách hàng #{customer_id}: {action_msg}!'
     })
 
 # CUSTOMERS API
@@ -983,7 +1041,7 @@ def update_order(oid):
     email_msg = ""
     if new_status == 'completed':
         query = '''
-            SELECT o.id, c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link
+            SELECT o.id, c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link, p.price AS product_price
             FROM orders o
             JOIN customers c ON o.customer_id = c.id
             JOIN products p ON o.product_id = p.id
@@ -991,7 +1049,7 @@ def update_order(oid):
         '''
         row = c.execute(query, (oid,)).fetchone()
         if row and row['customer_email'] and row['document_link']:
-            ok, emsg = send_document_email(row['customer_email'], row['customer_name'], row['product_name'], row['document_link'], oid)
+            ok, emsg = send_document_email(row['customer_email'], row['customer_name'], row['product_name'], row['document_link'], oid, gifts=get_gifts_for_price(row['product_price']))
             email_msg = f" | {emsg}"
 
     conn.close()
@@ -1002,7 +1060,7 @@ def send_order_email_route(oid):
     conn = get_db()
     c = conn.cursor()
     query = '''
-        SELECT o.id, c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link
+        SELECT o.id, c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link, p.price AS product_price
         FROM orders o
         JOIN customers c ON o.customer_id = c.id
         JOIN products p ON o.product_id = p.id
@@ -1021,7 +1079,7 @@ def send_order_email_route(oid):
     if not doc_link:
         return jsonify({'success': False, 'message': 'Sản phẩm này chưa được cấu hình Link Drive tài liệu!'}), 400
 
-    ok, msg = send_document_email(c_email, c_name, p_name, doc_link, oid)
+    ok, msg = send_document_email(c_email, c_name, p_name, doc_link, oid, gifts=get_gifts_for_price(row['product_price']))
     return jsonify({'success': ok, 'message': msg})
 
 @app.route('/admin/api/orders/<int:oid>/send-reminder', methods=['POST'])
@@ -1097,15 +1155,31 @@ def sepay_webhook():
     # 1. Parse transfer parameters
     content = str(data.get('content', '') or data.get('description', '') or data.get('transferContent', ''))
     amount = float(data.get('transferAmount', 0) or data.get('amountIn', 0) or data.get('amount', 0))
+    tx_id = str(data.get('id', '') or data.get('referenceCode', '') or '').strip()
+    tx_date = str(data.get('transactionDate', '') or '').strip() or None  # 'YYYY-MM-DD HH:MM:SS' (local time)
 
-    phone_match = re.search(r'0[3|5|7|8|9][0-9]{8}', content)
+    # Only handle incoming money
+    if str(data.get('transferType', 'in')).lower() == 'out':
+        return jsonify({'success': True, 'message': 'Bỏ qua giao dịch tiền ra.'})
+
+    # Phone must not be part of a longer digit sequence (bank refs like MBVCB.16554468005...)
+    phone_match = re.search(r'(?<!\d)0[35789]\d{8}(?!\d)', content)
     phone = phone_match.group(0) if phone_match else None
 
-    goi_match = re.search(r'G(?:oi)?\s*([1-3])', content, re.IGNORECASE)
-    level_match = re.search(r'L(?:evel)?\s*([1-4])', content, re.IGNORECASE)
+    goi_match = re.search(r'(?<![A-Za-z])G(?:oi)?\s*([1-3])(?!\d)', content, re.IGNORECASE)
+    level_match = re.search(r'(?<![A-Za-z])L(?:evel)?\s*([1-4])(?!\d)', content, re.IGNORECASE)
 
     conn = get_db()
     c = conn.cursor()
+
+    # Dedupe: SePay may retry the same transaction -> never process (and email) twice
+    c.execute('''CREATE TABLE IF NOT EXISTS sepay_transactions (
+        tx_id TEXT PRIMARY KEY, order_id INTEGER, created_at TEXT DEFAULT (datetime('now', 'localtime')))''')
+    if tx_id:
+        done = c.execute("SELECT order_id FROM sepay_transactions WHERE tx_id = ?", (tx_id,)).fetchone()
+        if done:
+            conn.close()
+            return jsonify({'success': True, 'order_id': done['order_id'], 'message': 'Giao dịch đã được xử lý trước đó.'})
 
     # Match affiliate code in transfer content
     aff_code = None
@@ -1115,22 +1189,9 @@ def sepay_webhook():
             aff_code = code_item
             break
 
-    # Resolve target product_id
-    product_id = None
-    if goi_match and level_match:
-        goi_num = goi_match.group(1)
-        level_num = level_match.group(1)
-        prod_row = c.execute(
-            "SELECT id FROM products WHERE name LIKE ? AND name LIKE ?",
-            (f"%Gói {goi_num}%", f"%Level {level_num}%")
-        ).fetchone()
-        if prod_row:
-            product_id = prod_row['id']
-
-    if not product_id:
-        prod_row = c.execute("SELECT id FROM products WHERE type = 'digital' ORDER BY id ASC LIMIT 1").fetchone()
-        if prod_row:
-            product_id = prod_row['id']
+    # Package: from transfer content, otherwise inferred from the amount actually received
+    goi_num = goi_match.group(1) if goi_match else GOI_BY_AMOUNT.get(int(round(amount)))
+    level_num = level_match.group(1) if level_match else None
 
     # Resolve customer_id
     customer_id = None
@@ -1140,21 +1201,69 @@ def sepay_webhook():
             customer_id = cust_row['id']
 
     # --- AUTOMATIC ORDER MATCHING & STATUS UPDATE ---
+    PENDING = "('pending', 'Chờ xác nhận', 'Chờ chuyển khoản')"
+    ref_time = tx_date or None
     pending_order = None
+    match_method = None
     if customer_id:
-        pending_order = c.execute('''
-            SELECT id, product_id FROM orders 
-            WHERE customer_id = ? AND status IN ('pending', 'Chờ xác nhận', 'Chờ chuyển khoản')
-            ORDER BY id DESC LIMIT 1
-        ''', (customer_id,)).fetchone()
-
-    if not pending_order and phone:
-        pending_order = c.execute('''
-            SELECT o.id, o.product_id FROM orders o
-            JOIN customers c ON o.customer_id = c.id
-            WHERE c.phone = ? AND o.status IN ('pending', 'Chờ xác nhận', 'Chờ chuyển khoản')
+        pending_order = c.execute(f'''
+            SELECT o.id, o.product_id, p.name AS product_name FROM orders o
+            LEFT JOIN products p ON o.product_id = p.id
+            WHERE o.customer_id = ? AND o.status IN {PENDING}
             ORDER BY o.id DESC LIMIT 1
-        ''', (phone,)).fetchone()
+        ''', (customer_id,)).fetchone()
+        match_method = 'phone'
+
+    # Fallback (bank stripped the phone from the content): match a recent pending order
+    #   a) same amount within 48h before the transfer, or
+    #   b) the ONLY pending order created within 3h before the transfer.
+    if not pending_order and not customer_id and amount > 0:
+        window_args = (ref_time, ref_time) if ref_time else (None, None)
+        time_filter = ("o.order_date BETWEEN datetime(COALESCE(?, datetime('now','localtime')), '-48 hours') "
+                       "AND datetime(COALESCE(?, datetime('now','localtime')), '+10 minutes')")
+        pending_order = c.execute(f'''
+            SELECT o.id, o.product_id, p.name AS product_name FROM orders o
+            LEFT JOIN products p ON o.product_id = p.id
+            WHERE o.status IN {PENDING} AND ABS(o.amount - ?) < 1 AND {time_filter}
+            ORDER BY o.id DESC LIMIT 1
+        ''', (amount, *window_args)).fetchone()
+        match_method = 'amount'
+        if not pending_order:
+            recent = c.execute(f'''
+                SELECT o.id, o.product_id, p.name AS product_name FROM orders o
+                LEFT JOIN products p ON o.product_id = p.id
+                WHERE o.status IN {PENDING}
+                  AND {time_filter.replace("-48 hours", "-3 hours")}
+                ORDER BY o.id DESC LIMIT 2
+            ''', window_args).fetchall()
+            if len(recent) == 1:
+                pending_order = recent[0]
+                match_method = 'only-recent'
+
+    # Level: from content, otherwise keep the level of the matched pending order
+    if not level_num and pending_order and pending_order['product_name']:
+        m = re.search(r'Level\s*(\d)', pending_order['product_name'])
+        if m:
+            level_num = m.group(1)
+
+    # Resolve target product_id (only override the pending order's product when we know the package)
+    product_id = None
+    if goi_num and level_num:
+        prod_row = c.execute(
+            "SELECT id FROM products WHERE name LIKE ? AND name LIKE ?",
+            (f"%Gói {goi_num}%", f"%Level {level_num}%")
+        ).fetchone()
+        if prod_row:
+            product_id = prod_row['id']
+    if not product_id and goi_num and not pending_order:
+        prod_row = c.execute("SELECT id FROM products WHERE name LIKE ? ORDER BY id ASC LIMIT 1",
+                             (f"%Gói {goi_num}%",)).fetchone()
+        if prod_row:
+            product_id = prod_row['id']
+    if not product_id and not pending_order:
+        prod_row = c.execute("SELECT id FROM products WHERE type = 'digital' ORDER BY id ASC LIMIT 1").fetchone()
+        if prod_row:
+            product_id = prod_row['id']
 
     if pending_order:
         oid = pending_order['id']
@@ -1165,7 +1274,7 @@ def sepay_webhook():
             WHERE id = ?
         ''', (amount if amount > 0 else 99000, target_product_id, aff_code, oid))
         conn.commit()
-        print(f"[SEPAY MATCH SUCCESS]: Updated existing Pending Order #{oid} to COMPLETED!")
+        print(f"[SEPAY MATCH SUCCESS]: Updated existing Pending Order #{oid} to COMPLETED! (match by {match_method})")
     else:
         if not customer_id:
             cust_phone = phone or f"09{int(data.get('id', 123456))%100000000:08d}"
@@ -1184,12 +1293,16 @@ def sepay_webhook():
         conn.commit()
         print(f"[SEPAY NEW ORDER CREATED]: Inserted new Order #{oid} as COMPLETED!")
 
+    if tx_id:
+        c.execute("INSERT OR IGNORE INTO sepay_transactions (tx_id, order_id) VALUES (?, ?)", (tx_id, oid))
+        conn.commit()
+
     if aff_code:
         record_affiliate_referral(oid, aff_code, amount if amount > 0 else 99000, 'completed')
 
     # Automatically send Google Drive document link to customer email
     query = '''
-        SELECT c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link
+        SELECT c.name AS customer_name, c.email AS customer_email, p.name AS product_name, p.document_link, p.price AS product_price
         FROM orders o
         JOIN customers c ON o.customer_id = c.id
         JOIN products p ON o.product_id = p.id
@@ -1200,7 +1313,7 @@ def sepay_webhook():
 
     email_sent = False
     if info and info['customer_email'] and info['document_link']:
-        email_sent, mail_msg = send_document_email(info['customer_email'], info['customer_name'], info['product_name'], info['document_link'], oid)
+        email_sent, mail_msg = send_document_email(info['customer_email'], info['customer_name'], info['product_name'], info['document_link'], oid, gifts=get_gifts_for_price(info['product_price']))
         print(f"[SEPAY AUTO EMAIL SENT]: Order #{oid} -> Email: {info['customer_email']} | Sent: {email_sent} | Info: {mail_msg}")
     else:
         print(f"[SEPAY EMAIL SKIPPED]: Order #{oid} missing email or document link. Info: {dict(info) if info else None}")
@@ -1577,6 +1690,7 @@ ADMIN_HTML = '''
                 <button onclick="switchSettingSubTab('general')" id="settab-general" class="pb-3 text-amber-700 border-b-2 border-amber-700">Cài đặt tổng quan</button>
                 <button onclick="switchSettingSubTab('payment')" id="settab-payment" class="pb-3 text-slate-500 hover:text-slate-900">Thanh toán & Resend API</button>
                 <button onclick="switchSettingSubTab('membership')" id="settab-membership" class="pb-3 text-slate-500 hover:text-slate-900">Gói hội viên</button>
+                <button onclick="switchSettingSubTab('gifts')" id="settab-gifts" class="pb-3 text-slate-500 hover:text-slate-900">🎁 Quà tặng</button>
                 <button onclick="switchSettingSubTab('ai')" id="settab-ai" class="pb-3 text-slate-500 hover:text-slate-900">Chatbot AI</button>
             </div>
 
@@ -1640,6 +1754,40 @@ ADMIN_HTML = '''
                         <div>
                             <label class="block text-[11px] font-bold text-slate-600 mb-1">Giá gói hội viên VIP (VNĐ)</label>
                             <input type="number" id="setting_membership_vip_price" class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="setting-panel-gifts" class="setting-panel hidden bg-white border border-[#E5DFD3] p-6 rounded-2xl shadow-sm">
+                    <p class="text-[11px] text-slate-600 bg-pink-50 border border-pink-200 rounded-xl p-3 mb-4">
+                        🎁 Quà tự động đính kèm trong email tài liệu, xác định theo <strong>giá sản phẩm</strong> và <strong>cộng dồn</strong>:
+                        Gói 99k → Quà 1 &nbsp;|&nbsp; Gói 299k → Quà 1 + 2 &nbsp;|&nbsp; Gói 499k → Quà 1 + 2 + 3.
+                        Để trống link = không gửi quà đó.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Tên Quà 1 (từ gói 99k)</label>
+                            <input type="text" id="setting_gift_1_name" placeholder="Ví dụ: Bộ 100 mẫu câu giao tiếp" class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Link Drive Quà 1</label>
+                            <input type="text" id="setting_gift_1_link" placeholder="https://drive.google.com/..." class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Tên Quà 2 (từ gói 299k)</label>
+                            <input type="text" id="setting_gift_2_name" class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Link Drive Quà 2</label>
+                            <input type="text" id="setting_gift_2_link" placeholder="https://drive.google.com/..." class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Tên Quà 3 (gói 499k)</label>
+                            <input type="text" id="setting_gift_3_name" class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Link Drive Quà 3</label>
+                            <input type="text" id="setting_gift_3_link" placeholder="https://drive.google.com/..." class="w-full bg-[#FBF9F4] border border-[#E5DFD3] text-xs text-slate-900 px-3.5 py-2.5 rounded-xl outline-none focus:border-amber-600 focus:bg-white">
                         </div>
                     </div>
                 </div>

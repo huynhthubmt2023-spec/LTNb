@@ -721,6 +721,24 @@
             document.getElementById('vietqrImage').src = qrImgPath;
 
             document.getElementById('orderModal').classList.remove('hidden');
+
+            // Cập nhật Đơn hàng chờ trong Admin theo đúng gói khách đã chọn (tránh đơn luôn bị ghi Gói 1 - 99K)
+            if (cleanPhone && name) {
+                try {
+                    const adminApiUrl = (window.location.protocol.startsWith('http') ? '/api/leads' : 'http://localhost:5000/api/leads');
+                    fetch(adminApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: decodeURIComponent(name),
+                            phone: cleanPhone,
+                            email: null,
+                            level: level,
+                            goi: goiCode.replace('G', '')
+                        })
+                    }).catch(err => console.log('Admin Sync Note:', err));
+                } catch (err) {}
+            }
         }
 
         function closeModal() {
